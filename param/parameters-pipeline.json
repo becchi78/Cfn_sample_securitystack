@@ -1,0 +1,10 @@
+{
+  "Parameters": {
+    "SecurityGroupName": "MyEC2SecurityGroup",
+    "S3BucketURL": "https://cfn-nested-sample.s3.ap-northeast-1.amazonaws.com/security",
+    "S3Bucket": "cfn-nested-sample",
+    "PolicyName": "MyEC2Policy",
+    "RoleName": "MyEC2Role",
+    "Ec2KeyPairName": "MyKeyPair"
+  }
+}

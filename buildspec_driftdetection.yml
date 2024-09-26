@@ -1,0 +1,73 @@
+version: 0.2
+
+phases:
+  build:
+    commands:
+      - echo "Starting Nested Stack Drift Detection"
+      - |
+        #!/bin/bash
+        set -e
+
+        # Function to detect drift for a single stack
+        detect_drift() {
+          local stack_name=$1
+          echo "Detecting drift for stack: $stack_name"
+          
+          drift_detection_id=$(aws cloudformation detect-stack-drift --stack-name $stack_name --query StackDriftDetectionId --output text)
+          echo "Drift Detection ID for $stack_name: $drift_detection_id"
+          
+          while true; do
+            detection_status=$(aws cloudformation describe-stack-drift-detection-status --stack-drift-detection-id $drift_detection_id --query DetectionStatus --output text)
+            echo "Detection Status for $stack_name: $detection_status"
+            if [ "$detection_status" == "DETECTION_COMPLETE" ]; then
+              break
+            elif [ "$detection_status" == "DETECTION_FAILED" ]; then
+              echo "Drift detection failed for $stack_name. Exiting."
+              return 1
+            fi
+            sleep 10
+          done
+          
+          drift_status=$(aws cloudformation describe-stack-drift-detection-status --stack-drift-detection-id $drift_detection_id --query StackDriftStatus --output text)
+          echo "Stack Drift Status for $stack_name: $drift_status"
+          
+          if [ "$drift_status" == "DRIFTED" ]; then
+            echo "Stack $stack_name has drifted. Checking individual resources..."
+            aws cloudformation describe-stack-resource-drifts --stack-name $stack_name --query 'StackResourceDrifts[?StackResourceDriftStatus!=`IN_SYNC`].[LogicalResourceId, StackResourceDriftStatus, PropertyDifferences[].PropertyPath]' --output table
+            return 1
+          elif [ "$drift_status" == "IN_SYNC" ]; then
+            echo "No drift detected for $stack_name. Stack is in sync."
+            return 0
+          else
+            echo "Unexpected drift status for $stack_name: $drift_status. Please investigate."
+            return 1
+          fi
+        }
+
+        # Get parent stack name
+        parent_stack_name="SecurityStack"  # Replace with your parent stack name
+
+        # Detect drift for parent stack
+        detect_drift $parent_stack_name
+        parent_drift_result=$?
+
+        # Get list of nested stacks
+        nested_stacks=$(aws cloudformation list-stack-resources --stack-name $parent_stack_name --query "StackResourceSummaries[?ResourceType=='AWS::CloudFormation::Stack'].PhysicalResourceId" --output text)
+
+        # Detect drift for each nested stack
+        overall_drift_status=0
+        for nested_stack in $nested_stacks; do
+          detect_drift $nested_stack
+          if [ $? -ne 0 ]; then
+            overall_drift_status=1
+          fi
+        done
+
+        # Final evaluation
+        if [ $parent_drift_result -ne 0 ] || [ $overall_drift_status -ne 0 ]; then
+          echo "Drift detected in one or more stacks. Pipeline should be stopped."
+          exit 1
+        else
+          echo "No drift detected in any stack. Proceeding with pipeline."
+          exit 0
+        fi

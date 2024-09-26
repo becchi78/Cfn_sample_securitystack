@@ -2,7 +2,12 @@
 
 Cfn のネステッドスタックとクロススタック参照のサンプル（security）
 
-## 準備
+CodePipeline による CI/CD を実施するためのファイルと GitHub Actions による Linting 用の workflow も含む。
+
+- param/parameters-cli.json 手動デプロイ用の設定ファイル
+- param/parameters-pipeline.json Pipeline 用の設定ファイル
+
+## 手動準備
 
 templates/にあるyamlはあらかじめ S3 の cfn-nested-sample/security に置いておく。
 
@@ -13,13 +18,13 @@ aws s3 cp ./templates/iam-policy.yaml s3://cfn-nested-sample/security/
 aws s3 cp ./templates/ec2keypair.yaml s3://cfn-nested-sample/security/
 ```
 
-## デプロイ
+## 手動デプロイ
 
 ```bash
 aws cloudformation create-stack \
   --stack-name SecurityStack \
   --template-body file://root-template.yaml \
-  --parameters file://param/parameters.json \
+  --parameters file://param/parameters-cli.json \
   --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND
 ```
 
